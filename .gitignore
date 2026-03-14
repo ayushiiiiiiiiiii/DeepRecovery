@@ -1,3 +1,4 @@
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -27,3 +28,6 @@ build/
 
 # Logs
 *.log
+
+*.img
+input/
