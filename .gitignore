@@ -31,3 +31,4 @@ build/
 
 *.img
 input/
+mount_point/
