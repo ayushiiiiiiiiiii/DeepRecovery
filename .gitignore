@@ -1,4 +1,3 @@
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -29,6 +28,7 @@ build/
 # Logs
 *.log
 
+# Project specific
 *.img
 input/
 mount_point/
