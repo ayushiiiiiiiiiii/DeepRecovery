@@ -1,3 +1,8 @@
+<<<<<<< HEAD
+=======
+
+# Deep-Recovery
+>>>>>>> 0679645a2eb23cfe8754ec25ec475bf82b7303e3
 # Deep Recovery Project
 
 This project demonstrates basic disk recovery techniques using Linux tools.
