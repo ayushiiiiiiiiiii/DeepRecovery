@@ -26,7 +26,6 @@ def verify_file_integrity(path: Union[str, Path], expected_sha256: str) -> bool:
 
 
 if __name__ == "__main__":
-    # Example usage:
     # 1) Generate hash for a sample image/doc
     sample_path = "sample_image_or_doc.bin"  # replace with your real file
     print(f"Computing SHA-256 for: {sample_path}")
@@ -34,7 +33,6 @@ if __name__ == "__main__":
     print(f"SHA-256: {digest}")
 
     # 2) Integrity verification example
-    # Pretend we stored this known-good hash somewhere (from first run)
     expected = digest  # in a real case, this would come from a trusted source
     ok = verify_file_integrity(sample_path, expected)
     if ok:
