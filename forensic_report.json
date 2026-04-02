@@ -1,0 +1,98 @@
+[
+  {
+    "filename": "carved_doc_002.pdf",
+    "relative_path": "carving\\carved_doc_002.pdf",
+    "source": "carving",
+    "size_bytes": 49,
+    "extension": ".pdf",
+    "sha256": "2058bcdaea76b72b16f6029e329aaa65770c98ba1db576fc0f0597600fe8e9aa",
+    "hash_status": "ok",
+    "detected_type": "PDF Document",
+    "integrity": "VERIFIED",
+    "verified_path": "verified_files\\carving\\PDF_Document\\2058bcdaea_carved_doc_002.pdf"
+  },
+  {
+    "filename": "carved_doc_006.jpg",
+    "relative_path": "carving\\carved_doc_006.jpg",
+    "source": "carving",
+    "size_bytes": 95,
+    "extension": ".jpg",
+    "sha256": "60dec2d46d3e1e22d40481007661658752d93c5ef94330abfdd1838614685f5d",
+    "hash_status": "ok",
+    "detected_type": "JPEG Image",
+    "integrity": "VERIFIED",
+    "verified_path": "verified_files\\carving\\JPEG_Image\\60dec2d46d_carved_doc_006.jpg"
+  },
+  {
+    "filename": "carved_image_001.jpg",
+    "relative_path": "carving\\carved_image_001.jpg",
+    "source": "carving",
+    "size_bytes": 137,
+    "extension": ".jpg",
+    "sha256": "9e84d50781802439e793f13888571f81a569e6cf371b0a9c8392032f36e7b693",
+    "hash_status": "ok",
+    "detected_type": "JPEG Image",
+    "integrity": "VERIFIED",
+    "verified_path": "verified_files\\carving\\JPEG_Image\\9e84d50781_carved_image_001.jpg"
+  },
+  {
+    "filename": "carved_image_003.png",
+    "relative_path": "carving\\carved_image_003.png",
+    "source": "carving",
+    "size_bytes": 121,
+    "extension": ".png",
+    "sha256": "34b1981518d68c40cb11312d84a2bae70ebbcd2feb99d91220016e769713facd",
+    "hash_status": "ok",
+    "detected_type": "PNG Image",
+    "integrity": "VERIFIED",
+    "verified_path": "verified_files\\carving\\PNG_Image\\34b1981518_carved_image_003.png"
+  },
+  {
+    "filename": "carved_image_008.png",
+    "relative_path": "carving\\carved_image_008.png",
+    "source": "carving",
+    "size_bytes": 83,
+    "extension": ".png",
+    "sha256": "04de75a54dc91f46ed93a712441cd4c8136371b5f164dc8617bbf9aa9413ac08",
+    "hash_status": "ok",
+    "detected_type": "PNG Image",
+    "integrity": "VERIFIED",
+    "verified_path": "verified_files\\carving\\PNG_Image\\04de75a54d_carved_image_008.png"
+  },
+  {
+    "filename": "meta_recovered_04.txt",
+    "relative_path": "metadata\\meta_recovered_04.txt",
+    "source": "metadata",
+    "size_bytes": 130,
+    "extension": ".txt",
+    "sha256": "2cb7224d62339fc8d70d8fd4694ff6738dee62b95778a27be73d46f98d28f1cb",
+    "hash_status": "ok",
+    "detected_type": "Plain Text",
+    "integrity": "VERIFIED",
+    "verified_path": "verified_files\\metadata\\Plain_Text\\2cb7224d62_meta_recovered_04.txt"
+  },
+  {
+    "filename": "meta_recovered_05.pdf",
+    "relative_path": "metadata\\meta_recovered_05.pdf",
+    "source": "metadata",
+    "size_bytes": 56,
+    "extension": ".pdf",
+    "sha256": "5b6572473758c0865a1212d233a9c8112b51e38295e0a63de4df279b7186e0ad",
+    "hash_status": "ok",
+    "detected_type": "PDF Document",
+    "integrity": "VERIFIED",
+    "verified_path": "verified_files\\metadata\\PDF_Document\\5b65724737_meta_recovered_05.pdf"
+  },
+  {
+    "filename": "meta_recovered_07.txt",
+    "relative_path": "metadata\\meta_recovered_07.txt",
+    "source": "metadata",
+    "size_bytes": 75,
+    "extension": ".txt",
+    "sha256": "9d365de4b807efb70f98dea1bf70159a54ffd328188ac54b6b498e40db6531ca",
+    "hash_status": "ok",
+    "detected_type": "Plain Text",
+    "integrity": "VERIFIED",
+    "verified_path": "verified_files\\metadata\\Plain_Text\\9d365de4b8_meta_recovered_07.txt"
+  }
+]
