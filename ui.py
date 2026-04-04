@@ -1,128 +1,122 @@
-import recovery
 import tkinter as tk
 from tkinter import filedialog, messagebox
-from tkinter import ttk
+import subprocess
 import os
 
-import subprocess
-def create_disk_image():
-    messagebox.showinfo("Info", "Creating disk image...")
-    subprocess.run(["sudo","dd","if=/dev/sdb","of=input/disk.img","bs=4M","status=progress"])
+class RecoveryUI:
 
-def mount_disk():
-    messagebox.showinfo("Info", "Mounting disk image...")
-    subprocess.run(["sudo","mount","input/disk_xfs.img","mount_point"])
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Deep Recovery Tool")
+        self.root.geometry("650x500")
 
-def unmount_disk():
-    messagebox.showinfo("Info", "Unmounting disk...")
-    subprocess.run(["sudo","umount","mount_point"])
+        self.disk_path = ""
 
-def recover_files():
-    messagebox.showinfo("Info", "Starting recovery tool...")
-    subprocess.run(["photorec"])
+        title = tk.Label(root, text="Deep Recovery System", font=("Arial", 18, "bold"))
+        title.pack(pady=10)
 
-def choose_disk():
-    file = filedialog.askopenfilename()
-    selected_file.set(file)
+        # Select Disk Image
+        self.select_btn = tk.Button(root, text="Select Disk Image", command=self.select_disk)
+        self.select_btn.pack(pady=5)
 
-# -------- UI WINDOW -------- #
+        self.disk_label = tk.Label(root, text="No disk selected")
+        self.disk_label.pack()
 
-root = tk.Tk()
-root.title("Deep Recovery Tool")
-root.geometry("500x450")
-root.configure(bg="#1e1e1e")
+        # Recovery options
+        option_label = tk.Label(root, text="Select Recovery Type", font=("Arial", 12))
+        option_label.pack(pady=10)
 
-title = tk.Label(
-    root,
-    text="Deep Recovery System",
-    font=("Arial",22,"bold"),
-    fg="white",
-    bg="#1e1e1e"
-)
+        self.recovery_type = tk.StringVar()
+        self.recovery_type.set("metadata")
 
-title.pack(pady=20)
+        meta_btn = tk.Radiobutton(root, text="Metadata Recovery", variable=self.recovery_type, value="metadata")
+        meta_btn.pack()
 
-# Selected disk label
-selected_file = tk.StringVar()
+        deep_btn = tk.Radiobutton(root, text="Deep Scan Recovery", variable=self.recovery_type, value="deep")
+        deep_btn.pack()
 
-disk_label = tk.Label(
-    root,
-    textvariable=selected_file,
-    fg="white",
-    bg="#1e1e1e"
-)
+        # Buttons
+        self.recover_btn = tk.Button(root, text="Recover Files", command=self.recover_files, bg="green", fg="white")
+        self.recover_btn.pack(pady=10)
 
-disk_label.pack(pady=5)
+        self.mount_btn = tk.Button(root, text="Mount Disk", command=self.mount_disk)
+        self.mount_btn.pack(pady=5)
 
-# Select disk button
-browse_btn = tk.Button(
-    root,
-    text="Select Disk Image",
-    width=25,
-    command=choose_disk
-)
+        self.exit_btn = tk.Button(root, text="Exit", command=root.quit)
+        self.exit_btn.pack(pady=10)
 
-browse_btn.pack(pady=10)
+        # Log box
+        log_label = tk.Label(root, text="Recovery Logs")
+        log_label.pack()
 
-# Create disk image button
-create_btn = tk.Button(
-    root,
-    text="Create Disk Image",
-    width=25,
-    height=2,
-    bg="#4CAF50",
-    fg="white",
-    command=create_disk_image
-)
+        self.log_box = tk.Text(root, height=12, width=70)
+        self.log_box.pack()
 
-create_btn.pack(pady=10)
+    def log(self, text):
+        self.log_box.insert(tk.END, text + "\n")
+        self.log_box.see(tk.END)
 
-# Mount disk button
-mount_btn = tk.Button(
-    root,
-    text="Mount Disk",
-    width=25,
-    height=2,
-    bg="#2196F3",
-    fg="white",
-    command=mount_disk
-)
+    def select_disk(self):
+        path = filedialog.askopenfilename(filetypes=[("Disk Images", "*.img *.bin")])
 
-mount_btn.pack(pady=10)
+        if path:
+            self.disk_path = path
+            self.disk_label.config(text=path)
+            self.log("Disk selected: " + path)
 
-# Unmount disk button
-unmount_btn = tk.Button(
-    root,
-    text="Unmount Disk",
-    width=25,
-    height=2,
-    bg="#9C27B0",
-    fg="white",
-    command=unmount_disk
-)
+    def mount_disk(self):
 
-unmount_btn.pack(pady=10)
+        if self.disk_path == "":
+            messagebox.showerror("Error", "Select disk image first")
+            return
 
-# Recover files button
-recover_btn = tk.Button(
-    root,
-    text="Recover Files",
-    width=25,
-    height=2,
-    bg="#FF9800",
-    fg="white",
-    command=recover_files
-)
+        cmd = f"sudo mount -o loop {self.disk_path} mount_point/"
 
-recover_btn.pack(pady=20)
+        try:
+            subprocess.run(cmd, shell=True)
+            self.log("Disk mounted successfully")
 
-exit_btn = tk.Button(
-    root,
-    text="Exit",
-    width=20,
-    command=root.quit
-)
+        except Exception as e:
+            self.log(str(e))
 
-exit_btn.pack(pady=10)
+    def recover_files(self):
 
-root.mainloop()
+        if self.disk_path == "":
+            messagebox.showerror("Error", "Select disk image first")
+            return
+
+        recovery_method = self.recovery_type.get()
+
+        if recovery_method == "metadata":
+
+            self.log("Starting Metadata Recovery...")
+
+            try:
+                subprocess.run(["python3","src/metadata_recovery/superblock_parser.py",self.disk_path])
+                subprocess.run(["python3","src/metadata_recovery/inode_parser.py",self.disk_path])
+                subprocess.run(["python3","src/metadata_recovery/recovery.py",self.disk_path])
+
+                self.log("Metadata recovery completed")
+
+            except Exception as e:
+                self.log(str(e))
+
+
+        elif recovery_method == "deep":
+
+            self.log("Starting Deep Scan Recovery...")
+
+            try:
+                subprocess.run(["python3","src/disk_reader.py",self.disk_path])
+
+                self.log("Deep recovery completed")
+
+            except Exception as e:
+                self.log(str(e))
+
+
+if __name__ == "__main__":
+
+    root = tk.Tk()
+    app = RecoveryUI(root)
+    root.mainloop()
