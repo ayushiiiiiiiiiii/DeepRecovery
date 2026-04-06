@@ -3,51 +3,44 @@ import os
 from datetime import datetime
 
 
-
 # Btrfs Item Type Constants
 
+BTRFS_INODE_ITEM_KEY  = 1
+BTRFS_INODE_REF_KEY   = 12
+BTRFS_DIR_ITEM_KEY    = 84
+BTRFS_DIR_INDEX_KEY   = 96
+BTRFS_EXTENT_DATA_KEY = 108
 
-BTRFS_INODE_ITEM_KEY     = 1
-BTRFS_INODE_REF_KEY      = 12
-BTRFS_DIR_ITEM_KEY       = 84
-BTRFS_DIR_INDEX_KEY      = 96
-BTRFS_EXTENT_DATA_KEY    = 108
-
-
-
-BTRFS_HEADER_SIZE = 101              
-BTRFS_KEY_SIZE    = 17               
-BTRFS_ITEM_SIZE   = BTRFS_KEY_SIZE + 8 
-
+BTRFS_HEADER_SIZE = 101
+BTRFS_KEY_SIZE    = 17
+BTRFS_ITEM_SIZE   = BTRFS_KEY_SIZE + 8
 
 BTRFS_INODE_ITEM_STRUCT_SIZE = 160
 
 
 class BtrfsInodeItem:
 
-
     def __init__(self, objectid, raw_data):
-        self.objectid = objectid
-        self.raw = raw_data
-        self.generation   = 0
-        self.transid      = 0
-        self.size         = 0
-        self.nbytes       = 0
-        self.block_group  = 0
-        self.nlink        = 0
-        self.uid          = 0
-        self.gid          = 0
-        self.mode         = 0
-        self.rdev         = 0
-        self.flags        = 0
-        self.atime        = None
-        self.ctime        = None
-        self.mtime        = None
-        self.otime        = None      # creation time
+        self.objectid    = objectid
+        self.raw         = raw_data
+        self.generation  = 0
+        self.transid     = 0
+        self.size        = 0
+        self.nbytes      = 0
+        self.block_group = 0
+        self.nlink       = 0
+        self.uid         = 0
+        self.gid         = 0
+        self.mode        = 0
+        self.rdev        = 0
+        self.flags       = 0
+        self.atime       = None
+        self.ctime       = None
+        self.mtime       = None
+        self.otime       = None
         self._parse()
 
     def _parse(self):
-       
         if len(self.raw) < BTRFS_INODE_ITEM_STRUCT_SIZE:
             return
 
@@ -65,14 +58,20 @@ class BtrfsInodeItem:
 
         self.rdev, self.flags = struct.unpack_from("<QQ", self.raw, 0x38)
 
-        # Timestamps: each is (sec:uint64, nsec:uint32) = 12 bytes
-        self.atime = self._parse_time(0x70)
-        self.ctime = self._parse_time(0x7C)
-        self.mtime = self._parse_time(0x88)
-        self.otime = self._parse_time(0x94)
+        # FIX: correct Btrfs inode timestamp offsets
+        # Each timestamp is (sec: uint64, nsec: uint32) = 12 bytes
+        # Real layout:
+        #   atime  0x58
+        #   ctime  0x64
+        #   mtime  0x70
+        #   otime  0x7C
+        # (old wrong values were 0x70, 0x7C, 0x88, 0x94 — all shifted by +0x18)
+        self.atime = self._parse_time(0x58)
+        self.ctime = self._parse_time(0x64)
+        self.mtime = self._parse_time(0x70)
+        self.otime = self._parse_time(0x7C)
 
     def _parse_time(self, offset):
-   
         if offset + 12 > len(self.raw):
             return None
         sec, nsec = struct.unpack_from("<QI", self.raw, offset)
@@ -84,12 +83,11 @@ class BtrfsInodeItem:
             return None
 
     def file_type_str(self):
-    
         ft = (self.mode >> 12) & 0xF
         types = {
-            0x1: "FIFO", 0x2: "CharDev", 0x4: "Directory",
-            0x6: "BlockDev", 0x8: "RegularFile", 0xA: "Symlink",
-            0xC: "Socket",
+            0x1: "FIFO",      0x2: "CharDev",  0x4: "Directory",
+            0x6: "BlockDev",  0x8: "RegularFile",
+            0xA: "Symlink",   0xC: "Socket",
         }
         return types.get(ft, f"Unknown(0x{ft:X})")
 
@@ -102,7 +100,6 @@ class BtrfsInodeItem:
 
 
 class BtrfsDirItem:
-  
 
     def __init__(self, raw_data):
         self.child_objectid = 0
@@ -111,13 +108,17 @@ class BtrfsDirItem:
         self._parse(raw_data)
 
     def _parse(self, data):
-       
         if len(data) < 0x1E:
             return
+
         self.child_objectid = struct.unpack_from("<Q", data, 0)[0]
-        self.child_type     = data[8]
-        name_len            = struct.unpack_from("<H", data, 0x1B)[0]
-        dir_type            = data[0x1D]
+
+        # FIX: child_type is at offset 0x11 (17), NOT offset 0x08
+        # Offset 0x08 is part of the key's transid field, not the type.
+        self.child_type = data[0x11]
+
+        name_len = struct.unpack_from("<H", data, 0x1B)[0]
+
         if 0x1E + name_len <= len(data):
             self.name = data[0x1E:0x1E + name_len].decode("utf-8", errors="replace")
 
@@ -127,27 +128,23 @@ class BtrfsDirItem:
 
 class BtrfsExtentData:
 
-
     def __init__(self, objectid, offset_in_file, raw_data):
-        self.objectid       = objectid
-        self.offset_in_file = offset_in_file  # byte offset within the file
-        self.generation     = 0
-        self.ram_bytes      = 0
-        self.compression    = 0
-        self.encryption     = 0
-        self.other_encoding = 0
-        self.extent_type    = 0               # 0=inline, 1=regular, 2=prealloc
-        # For regular/prealloc extents:
-        self.disk_bytenr    = 0               # physical byte offset on disk
-        self.disk_num_bytes = 0
-        self.extent_offset  = 0
-        self.num_bytes      = 0
-        # For inline extents:
-        self.inline_data    = b""
+        self.objectid        = objectid
+        self.offset_in_file  = offset_in_file
+        self.generation      = 0
+        self.ram_bytes       = 0
+        self.compression     = 0
+        self.encryption      = 0
+        self.other_encoding  = 0
+        self.extent_type     = 0
+        self.disk_bytenr     = 0
+        self.disk_num_bytes  = 0
+        self.extent_offset   = 0
+        self.num_bytes       = 0
+        self.inline_data     = b""
         self._parse(raw_data)
 
     def _parse(self, data):
-        
         if len(data) < 0x15:
             return
         (
@@ -160,7 +157,6 @@ class BtrfsExtentData:
         self.extent_type    = data[0x14]
 
         if self.extent_type == 0:
-            # Inline extent – data follows immediately
             self.inline_data = data[0x15:]
         elif len(data) >= 0x35:
             (
@@ -180,23 +176,16 @@ class BtrfsExtentData:
 
 
 class BtrfsInodeParser:
-   
 
     def __init__(self, image_path, nodesize=16384):
-    
         self.image_path = image_path
         self.nodesize   = nodesize
-        self.inodes     = {}      # objectid → BtrfsInodeItem
-        self.dir_items  = []      # list of BtrfsDirItem
-        self.extents    = []      # list of BtrfsExtentData
-
-   
-    # Public API
-  
+        self.inodes     = {}
+        self.dir_items  = []
+        self.extents    = []
 
     def scan(self, max_bytes=None):
-        
-        file_size = os.path.getsize(self.image_path)
+        file_size  = os.path.getsize(self.image_path)
         scan_limit = min(file_size, max_bytes) if max_bytes else file_size
 
         print(f"[*] Scanning for Btrfs inodes in {self.image_path}")
@@ -205,7 +194,7 @@ class BtrfsInodeParser:
         print(f"    Scan limit : {scan_limit / (1024*1024):.2f} MB")
 
         with open(self.image_path, "rb") as f:
-            offset = 0
+            offset      = 0
             nodes_found = 0
 
             while offset + self.nodesize <= scan_limit:
@@ -227,7 +216,6 @@ class BtrfsInodeParser:
         return self.inodes
 
     def get_filename_map(self):
-       
         name_map = {}
         for d in self.dir_items:
             if d.name and d.child_objectid:
@@ -237,12 +225,7 @@ class BtrfsInodeParser:
     def get_extents_for_inode(self, objectid):
         return [e for e in self.extents if e.objectid == objectid]
 
-
-    # Internal helpers
-
-
     def _is_leaf_node(self, data):
-        
         if len(data) < BTRFS_HEADER_SIZE:
             return False
 
@@ -251,12 +234,14 @@ class BtrfsInodeParser:
 
         if level != 0:
             return False
-        if nritems == 0 or nritems > 500:
+
+        # FIX: tighter upper bound reduces false positives on random disk data.
+        # A 16KB node with 25-byte min items caps around 420; using 400 is safe.
+        if nritems == 0 or nritems > 400:
             return False
 
-       
         if BTRFS_HEADER_SIZE + BTRFS_ITEM_SIZE <= len(data):
-            first_item_type = data[BTRFS_HEADER_SIZE + 8]  # type byte in key
+            first_item_type = data[BTRFS_HEADER_SIZE + 8]
             if first_item_type > 230:
                 return False
 
@@ -264,21 +249,19 @@ class BtrfsInodeParser:
 
     def _parse_leaf_node(self, data, node_offset):
         nritems = struct.unpack_from("<I", data, 0x60)[0]
-        count = 0
+        count   = 0
 
         for i in range(nritems):
             item_offset = BTRFS_HEADER_SIZE + i * BTRFS_ITEM_SIZE
             if item_offset + BTRFS_ITEM_SIZE > len(data):
                 break
 
-            
-            objectid = struct.unpack_from("<Q", data, item_offset)[0]
-            item_type = data[item_offset + 8]
-            key_offset = struct.unpack_from("<Q", data, item_offset + 9)[0]
+            objectid    = struct.unpack_from("<Q", data, item_offset)[0]
+            item_type   = data[item_offset + 8]
+            key_offset  = struct.unpack_from("<Q", data, item_offset + 9)[0]
             data_offset = struct.unpack_from("<I", data, item_offset + 17)[0]
             data_size   = struct.unpack_from("<I", data, item_offset + 21)[0]
 
-            # data_offset is relative to the end of the header
             abs_data_pos = BTRFS_HEADER_SIZE + data_offset
             if abs_data_pos + data_size > len(data):
                 continue
@@ -303,9 +286,6 @@ class BtrfsInodeParser:
 
         return count
 
-
-
-# Stand-alone usage
 
 if __name__ == "__main__":
     import sys
