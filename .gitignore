@@ -3,7 +3,11 @@ __pycache__/
 *.py[cod]
 *.pyo
 
-# Virtual environments
+disk_image.dd
+*.dd
+*.img
+input/
+output/# Virtual environments
 venv/
 env/
 .venv/
@@ -32,7 +36,7 @@ build/
 *.img
 input/
 mount_point/
-recovery_results/
-recovery_result/
+*.dd
+
 Deep_Recovery_Pro.py
 bulk_recover.py
