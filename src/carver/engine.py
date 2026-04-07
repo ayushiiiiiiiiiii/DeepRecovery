@@ -75,6 +75,32 @@ def _carve_riff_webp(
     return f.read(file_len)
 
 
+def _carve_bmp_header_size(
+    f,
+    offset: int,
+    sector: bytes,
+    sigs: dict[str, Any],
+    disk_size: int,
+) -> Optional[bytes]:
+    """
+    BMP Header contains total file size at offset 2 (4 bytes, little-endian).
+    """
+    if len(sector) < 14:
+        return None
+    if sector[:2] != b'BM':
+        return None
+    
+    file_len = int.from_bytes(sector[2:6], 'little')
+    if file_len < 14:
+        return None
+    
+    # Sanity check against max_size and disk boundaries
+    file_len = min(file_len, sigs['max_size'], max(0, disk_size - offset))
+    
+    f.seek(offset)
+    return f.read(file_len)
+
+
 def run_carver_professional(
     disk_path: str,
     output_folder: str,
@@ -137,6 +163,20 @@ def run_carver_professional(
                                 break
                     continue
 
+                # BMP size parsing check
+                if sigs.get('kind') == 'header_size':
+                    if len(sector) >= 2:
+                        for rel in range(0, len(sector) - 2 + 1):
+                            if sector[rel : rel + 2] == b'BM':
+                                start_offset = offset + rel
+                                best = (
+                                    (start_offset, ext, sigs, rel)
+                                    if best is None or start_offset < best[0]
+                                    else best
+                                )
+                                break
+                    continue
+
                 if 'header' not in sigs or 'footer' not in sigs:
                     continue
                 header_pos = sector.find(sigs['header'])
@@ -184,36 +224,119 @@ def run_carver_professional(
                     offset = start_offset + 1
                     continue
 
+                # BMP size-field carve
+                if sigs.get('kind') == 'header_size':
+                    file_data = _carve_bmp_header_size(
+                        f, start_offset, sector[rel:], sigs, disk_size
+                    )
+                    if file_data is not None:
+                        # BMP is uncompressed, so integrity check is mostly size-based
+                        is_valid = len(file_data) > 14 and file_data[:2] == b'BM'
+                        status = 'Verified Size' if is_valid else 'Corrupt Header'
+                        
+                        recovery_count += 1
+                        save_to = generate_path(output_folder, ext, recovery_count, start_offset)
+                        with open(save_to, 'wb') as out:
+                            out.write(file_data)
+                        
+                        recovery_log.append({
+                            'offset': start_offset,
+                            'type': ext,
+                            'path': save_to,
+                            'status': status,
+                        })
+                        offset = start_offset + len(file_data)
+                        continue
+                    
+                    offset = start_offset + 1
+                    continue
+
                 # Header/footer carve
                 if 'header' in sigs and 'footer' in sigs:
                     max_carve = sigs['max_size']
-                    f.seek(start_offset)
 
+                    #  f.seek(start_offset)
+                    
+                    # We already have the first part of the file from our initial sector read.
                     file_data = sector[rel:]
                     bytes_read = len(file_data)
                     found_footer = False
 
-                    footer_pos = file_data.find(sigs['footer'])
+                    #  footer_pos = file_data.find(sigs['footer'])
+
+                    # Check if the footer is already in our first sector read.
+                    footer_sig = sigs['footer']
+                    footer_len = len(footer_sig)
+                    footer_pos = file_data.find(footer_sig)
+                    
                     if footer_pos != -1:
-                        end = footer_pos + len(sigs['footer'])
+
+                        #  end = footer_pos + len(sigs['footer'])
+
+                        end = footer_pos + footer_len
                         file_data = file_data[:end]
                         found_footer = True
                         bytes_read = len(file_data)
                     else:
+                        # # To detect footers split across chunk boundaries, we search
+                        # # a combined window of the end of the previous data + the new chunk.
+                        # footer_sig = sigs['footer']
+                        # footer_len = len(footer_sig)
+
+
+                        
+                        # Continue reading from the point where our first sector ended.
+                        # This avoids duplicating the header data.
+                        f.seek(start_offset + len(file_data))
+                        
                         while bytes_read < max_carve:
                             remaining = min(sector_size, max_carve - bytes_read)
                             next_chunk = f.read(remaining)
                             if not next_chunk:
                                 break
 
-                            footer_pos = next_chunk.find(sigs['footer'])
+
+
+                            #  #  footer_pos = next_chunk.find(sigs['footer'])
+                            
+                            # # Search in a window that includes the end of our current file_data
+                            # # to catch split signatures.
+                            # search_window = file_data[-(footer_len - 1):] + next_chunk
+                            
+                            # Search in a sliding window that spans the end of file_data 
+                            # and the start of next_chunk to catch signatures split across sectors.
+                            overlap_start = max(0, len(file_data) - (footer_len - 1))
+                            search_window = file_data[overlap_start:] + next_chunk
+                            footer_pos = search_window.find(footer_sig)
+                            
                             if footer_pos != -1:
-                                end_in_chunk = footer_pos + len(sigs['footer'])
-                                file_data += next_chunk[:end_in_chunk]
+
+                                
+                            # # end_in_chunk = footer_pos + len(sigs['footer'])
+                            # #     file_data += next_chunk[:end_in_chunk]
+
+                            #     # We found it! Calculate the cutoff point in the file.
+                            #     # start_of_footer in search_window is at footer_pos.
+                            #     # Therefore, the end of the footer is at footer_pos + footer_len.
+                            #     # We then subtract the overlap we added (last_few_bytes)
+                            #     # to get the amount we need from next_chunk.
+                            #     overlap_len = len(file_data[-(footer_len - 1):])
+
+
+
+                                # Found bit-perfect cutoff point
+                                overlap_len = len(file_data[overlap_start:])
+                                bytes_from_chunk = (footer_pos + footer_len) - overlap_len
+                                
+                                if bytes_from_chunk > 0:
+                                    file_data += next_chunk[:bytes_from_chunk]
+                                elif bytes_from_chunk < 0:
+                                    file_data = file_data[:bytes_from_chunk]
+                                
                                 found_footer = True
                                 bytes_read = len(file_data)
                                 break
-
+                            
                             file_data += next_chunk
                             bytes_read += len(next_chunk)
 

@@ -30,10 +30,19 @@ def generate_path(output_dir: str, ext: str, count: int, offset: int) -> str:
         'jpg': 'Images',
         'jpeg': 'Images',
         'png': 'Images',
+        'gif': 'Images',
+        'bmp': 'Images',
         'webp': 'Images',
         'pdf': 'Documents',
+        'docx': 'Documents',
+        'doc': 'Documents',
         'mp3': 'Audio',
+        'wav': 'Audio',
         'mp4': 'Video',
+        'avi': 'Video',
+        'zip': 'Archives',
+        'rar': 'Archives',
+        '7z': 'Archives',
     }
     subfolder = categories.get(ext.lower(), 'Misc')
     final_dir = os.path.join(output_dir, subfolder)
