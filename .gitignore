@@ -40,3 +40,5 @@ mount_point/
 
 Deep_Recovery_Pro.py
 bulk_recover.py
+output*/
+*.dd
