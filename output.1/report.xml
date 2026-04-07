@@ -1,0 +1,44 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<dfxml xmloutputversion='1.0'>
+  <metadata 
+  xmlns='http://www.forensicswiki.org/wiki/Category:Digital_Forensics_XML' 
+  xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' 
+  xmlns:dc='http://purl.org/dc/elements/1.1/'>
+    <dc:type>Carve Report</dc:type>
+  </metadata>
+  <creator>
+    <package>PhotoRec</package>
+    <version>7.1</version>
+    <build_environment>
+      <compiler>GCC 11.2</compiler>
+      <library name='libext2fs' version='1.46.5'/>
+      <library name='libewf' version='none'/>
+      <library name='libjpeg' version='libjpeg-turbo-2.1.1'/>
+      <library name='libntfs' version='libntfs-3g'/>
+      <library name='zlib' version='1.2.11'/>
+    </build_environment>
+    <execution_environment>
+      <os_sysname>Linux</os_sysname>
+      <os_release>6.6.87.2-microsoft-standard-WSL2</os_release>
+      <os_version>#1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025</os_version>
+      <host>LAPTOP-AFUQHA0H</host>
+      <arch>x86_64</arch>
+      <uid>0</uid>
+      <start_time>2026-04-07T13:56:19+0530</start_time>
+    </execution_environment>
+  </creator>
+  <source>
+    <image_filename>/dev/sdb</image_filename>
+    <sectorsize>512</sectorsize>
+    <device_model>Msft Virtual Disk</device_model>
+    <image_size>195080192</image_size>
+    <volume>
+      <byte_runs>
+        <byte_run offset='0' img_offset='0' len='195080192'/>
+      </byte_runs>
+      <block_size>4096</block_size>
+    </volume>
+  </source>
+  <configuration>
+  </configuration>
+</dfxml>
