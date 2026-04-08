@@ -21,74 +21,114 @@ class DeepRecoveryUI:
 
         self.root = root
         self.root.title("Deep Recovery Tool")
-        self.root.geometry("1000x650")
+        self.root.geometry("1200x750")
         self.root.configure(bg="#1e1e1e")
 
+        # allow resizing
+        self.root.rowconfigure(3, weight=1)
+        self.root.columnconfigure(0, weight=1)
+
+        # ---------- STYLE ----------
+        style = ttk.Style()
+        style.theme_use("clam")
+
+        style.configure(
+            "TButton",
+            font=("Segoe UI", 13, "bold"),
+            padding=10
+        )
+
+        # ---------- TITLE ----------
         title = tk.Label(
             root,
             text="Deep Recovery System",
-            font=("Arial", 24, "bold"),
+            font=("Segoe UI", 30, "bold"),
             fg="white",
             bg="#1e1e1e"
         )
-        title.pack(pady=10)
+        title.pack(pady=20)
 
+        # ---------- BUTTON FRAME ----------
         frame = tk.Frame(root, bg="#1e1e1e")
         frame.pack(pady=10)
 
-        ttk.Button(frame, text="Create Disk Image",
-                   command=lambda: threading.Thread(target=self.create_image).start()).grid(row=0, column=0, padx=10)
+        buttons = [
 
-        ttk.Button(frame, text="Mount Disk",
-                   command=lambda: threading.Thread(target=self.mount_disk).start()).grid(row=0, column=1, padx=10)
+            ("Create Disk Image", self.create_image),
+            ("Mount Disk", self.mount_disk),
+            ("Unmount Disk", self.unmount_disk),
 
-        ttk.Button(frame, text="Unmount Disk",
-                   command=lambda: threading.Thread(target=self.unmount_disk).start()).grid(row=0, column=2, padx=10)
+            ("Metadata Recovery", self.metadata_recovery),
+            ("Deep Scan Recovery", self.deep_scan),
+            ("Select Recovered Files", self.select_files),
 
-        ttk.Button(frame, text="Metadata Recovery",
-                   command=lambda: threading.Thread(target=self.metadata_recovery).start()).grid(row=1, column=0, pady=10)
+            ("Generate Hashes", self.generate_hashes),
+            ("Show Statistics", self.show_chart)
+        ]
 
-        ttk.Button(frame, text="Deep Scan Recovery",
-                   command=lambda: threading.Thread(target=self.deep_scan).start()).grid(row=1, column=1)
+        for i, (text, cmd) in enumerate(buttons):
 
-        ttk.Button(frame, text="Select Recovered Files",
-                   command=self.select_files).grid(row=1, column=2)
+            btn = tk.Button(
+                frame,
+                text=text,
+                command=lambda c=cmd: threading.Thread(target=c).start(),
+                width=22,
+                height=2,
+                font=("Segoe UI", 13, "bold"),
+                bg="#2d2d2d",
+                fg="white",
+                activebackground="#444444",
+                bd=0
+            )
 
-        ttk.Button(frame, text="Generate Hashes",
-                   command=lambda: threading.Thread(target=self.generate_hashes).start()).grid(row=1, column=3)
+            btn.grid(row=i // 4, column=i % 4, padx=12, pady=12)
 
-        ttk.Button(frame, text="Show Statistics",
-                   command=self.show_chart).grid(row=1, column=4)
+        # ---------- PROGRESS BAR ----------
+        self.progress = ttk.Progressbar(
+            root,
+            length=600,
+            mode='indeterminate'
+        )
+        self.progress.pack(pady=15)
 
-        self.progress = ttk.Progressbar(root, length=500, mode='indeterminate')
-        self.progress.pack(pady=10)
-
+        # ---------- LOG TITLE ----------
         log_label = tk.Label(
             root,
             text="Recovery Log",
-            font=("Arial", 14),
+            font=("Segoe UI", 20, "bold"),
             fg="white",
             bg="#1e1e1e"
         )
         log_label.pack()
 
+        # ---------- LOG FRAME ----------
+        log_frame = tk.Frame(root)
+        log_frame.pack(fill="both", expand=True, padx=25, pady=10)
+
+        scrollbar = tk.Scrollbar(log_frame)
+
         self.log_box = tk.Text(
-            root,
-            height=20,
-            width=120,
-            bg="black",
-            fg="lime"
+            log_frame,
+            bg="#000000",
+            fg="#00ff9c",
+            insertbackground="white",
+            font=("Consolas", 16, "bold"),   # 🔥 BIGGER TEXT HERE
+            yscrollcommand=scrollbar.set
         )
-        self.log_box.pack(pady=10)
 
-    # ---------------- LOG ----------------
+        scrollbar.config(command=self.log_box.yview)
 
+        scrollbar.pack(side="right", fill="y")
+        self.log_box.pack(side="left", fill="both", expand=True)
+
+    # ---------- LOG ----------
     def log(self, text):
-        self.log_box.insert(tk.END, text + "\n")
+
+        self.log_box.insert(tk.END, text + "\n\n")   # extra spacing
         self.log_box.see(tk.END)
+        self.root.update()
 
-    # ---------------- CREATE IMAGE ----------------
-
+    # ---------- CREATE IMAGE ----------
     def create_image(self):
 
         self.progress.start()
@@ -96,20 +136,25 @@ class DeepRecoveryUI:
 
         os.makedirs("input", exist_ok=True)
 
-        subprocess.run([
-            "sudo",
-            "dd",
-            "if=/dev/sdb",
-            "of=input/disk.img",
-            "bs=4M",
-            "status=progress"
-        ])
+        try:
 
-        self.log("Disk image created at input/disk.img")
+            subprocess.run([
+                "sudo",
+                "dd",
+                "if=/dev/sdb",
+                "of=input/disk.img",
+                "bs=4M",
+                "status=progress"
+            ])
+
+            self.log("Disk image created: input/disk.img")
+
+        except Exception as e:
+            self.log(f"Error creating image: {e}")
+
         self.progress.stop()
 
-    # ---------------- MOUNT DISK ----------------
-
+    # ---------- MOUNT ----------
     def mount_disk(self):
 
         self.progress.start()
@@ -117,34 +162,44 @@ class DeepRecoveryUI:
 
         os.makedirs(MOUNT_DIR, exist_ok=True)
 
-        subprocess.run([
-            "sudo",
-            "mount",
-            "input/disk.img",
-            MOUNT_DIR
-        ])
+        try:
 
-        self.log("Disk mounted at mount_point")
+            subprocess.run([
+                "sudo",
+                "mount",
+                "input/disk.img",
+                MOUNT_DIR
+            ])
+
+            self.log(f"Mounted at {MOUNT_DIR}")
+
+        except Exception as e:
+            self.log(f"Mount error: {e}")
+
         self.progress.stop()
 
-    # ---------------- UNMOUNT ----------------
-
+    # ---------- UNMOUNT ----------
     def unmount_disk(self):
 
         self.progress.start()
         self.log("Unmounting disk...")
 
-        subprocess.run([
-            "sudo",
-            "umount",
-            MOUNT_DIR
-        ])
+        try:
 
-        self.log("Disk unmounted")
+            subprocess.run([
+                "sudo",
+                "umount",
+                MOUNT_DIR
+            ])
+
+            self.log("Disk unmounted")
+
+        except Exception as e:
+            self.log(f"Unmount error: {e}")
+
         self.progress.stop()
 
-    # ---------------- METADATA RECOVERY ----------------
-
+    # ---------- METADATA RECOVERY ----------
     def metadata_recovery(self):
 
         global valid_files
@@ -156,13 +211,14 @@ class DeepRecoveryUI:
 
         if not os.path.exists(disk_image):
 
-            self.log("ERROR: Disk image not found.")
+            self.log("ERROR: Disk image not found")
             self.progress.stop()
             return
 
         os.makedirs(OUTPUT_DIR, exist_ok=True)
 
         process = subprocess.Popen(
+
             [
                 "python3",
                 "-m",
@@ -170,12 +226,14 @@ class DeepRecoveryUI:
                 disk_image,
                 OUTPUT_DIR
             ],
+
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True
         )
 
         for line in process.stdout:
+
             self.log(line.strip())
 
             if "Recovered" in line or "recovered" in line:
@@ -184,8 +242,7 @@ class DeepRecoveryUI:
         self.log("Metadata Recovery Completed")
         self.progress.stop()
 
-    # ---------------- DEEP SCAN ----------------
-
+    # ---------- DEEP SCAN ----------
     def deep_scan(self):
 
         self.progress.start()
@@ -195,7 +252,7 @@ class DeepRecoveryUI:
 
         if not os.path.exists(image):
 
-            self.log("Disk image not found!")
+            self.log("Disk image not found")
             self.progress.stop()
             return
 
@@ -216,8 +273,7 @@ class DeepRecoveryUI:
 
         self.progress.stop()
 
-    # ---------------- SELECT FILES ----------------
-
+    # ---------- SELECT FILES ----------
     def select_files(self):
 
         global valid_files
@@ -228,6 +284,7 @@ class DeepRecoveryUI:
         )
 
         if not files:
+
             self.log("No files selected")
             return
 
@@ -237,8 +294,7 @@ class DeepRecoveryUI:
             valid_files += 1
             self.hash_file(file)
 
-    # ---------------- HASH SINGLE FILE ----------------
-
+    # ---------- HASH FILE ----------
     def hash_file(self, filepath):
 
         sha256 = hashlib.sha256()
@@ -247,14 +303,8 @@ class DeepRecoveryUI:
 
             with open(filepath, "rb") as f:
 
-                while True:
-
-                    data = f.read(4096)
-
-                    if not data:
-                        break
-
-                    sha256.update(data)
+                while chunk := f.read(4096):
+                    sha256.update(chunk)
 
             hash_val = sha256.hexdigest()
 
@@ -264,11 +314,10 @@ class DeepRecoveryUI:
 
             self.log(f"Hashing failed for {filepath}: {e}")
 
-    # ---------------- HASH ALL FILES ----------------
-
+    # ---------- HASH ALL ----------
     def generate_hashes(self):
 
-        self.log("Starting Hashing Process...\n")
+        self.log("Starting Hashing Process...")
 
         found = False
 
@@ -285,10 +334,9 @@ class DeepRecoveryUI:
         if not found:
             self.log("No files found in output directory")
 
-        self.log("\nHashing Completed\n")
+        self.log("Hashing Completed")
 
-    # ---------------- STATISTICS ----------------
-
+    # ---------- STATISTICS ----------
     def show_chart(self):
 
         global valid_files, corrupted_files
@@ -300,17 +348,19 @@ class DeepRecoveryUI:
         labels = ["Valid Files", "Corrupted Files"]
 
         fig, ax = plt.subplots()
+
         ax.pie(data, labels=labels, autopct='%1.1f%%')
         ax.set_title("Recovery Statistics")
 
         chart = tk.Toplevel(self.root)
+        chart.title("Recovery Statistics")
 
         canvas = FigureCanvasTkAgg(fig, chart)
         canvas.draw()
         canvas.get_tk_widget().pack()
 
 
-# ---------------- START UI ----------------
+# ---------- START UI ----------
 
 root = tk.Tk()
 
