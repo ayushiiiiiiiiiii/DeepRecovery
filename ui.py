@@ -1,122 +1,319 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import ttk, filedialog
 import subprocess
+import threading
 import os
+import hashlib
+import webbrowser
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-class RecoveryUI:
+OUTPUT_DIR = "output"
+MOUNT_DIR = "mount_point"
+
+valid_files = 0
+corrupted_files = 0
+
+
+class DeepRecoveryUI:
 
     def __init__(self, root):
+
         self.root = root
         self.root.title("Deep Recovery Tool")
-        self.root.geometry("650x500")
+        self.root.geometry("1000x650")
+        self.root.configure(bg="#1e1e1e")
 
-        self.disk_path = ""
-
-        title = tk.Label(root, text="Deep Recovery System", font=("Arial", 18, "bold"))
+        title = tk.Label(
+            root,
+            text="Deep Recovery System",
+            font=("Arial", 24, "bold"),
+            fg="white",
+            bg="#1e1e1e"
+        )
         title.pack(pady=10)
 
-        # Select Disk Image
-        self.select_btn = tk.Button(root, text="Select Disk Image", command=self.select_disk)
-        self.select_btn.pack(pady=5)
+        frame = tk.Frame(root, bg="#1e1e1e")
+        frame.pack(pady=10)
 
-        self.disk_label = tk.Label(root, text="No disk selected")
-        self.disk_label.pack()
+        ttk.Button(frame, text="Create Disk Image",
+                   command=lambda: threading.Thread(target=self.create_image).start()).grid(row=0, column=0, padx=10)
 
-        # Recovery options
-        option_label = tk.Label(root, text="Select Recovery Type", font=("Arial", 12))
-        option_label.pack(pady=10)
+        ttk.Button(frame, text="Mount Disk",
+                   command=lambda: threading.Thread(target=self.mount_disk).start()).grid(row=0, column=1, padx=10)
 
-        self.recovery_type = tk.StringVar()
-        self.recovery_type.set("metadata")
+        ttk.Button(frame, text="Unmount Disk",
+                   command=lambda: threading.Thread(target=self.unmount_disk).start()).grid(row=0, column=2, padx=10)
 
-        meta_btn = tk.Radiobutton(root, text="Metadata Recovery", variable=self.recovery_type, value="metadata")
-        meta_btn.pack()
+        ttk.Button(frame, text="Metadata Recovery",
+                   command=lambda: threading.Thread(target=self.metadata_recovery).start()).grid(row=1, column=0, pady=10)
 
-        deep_btn = tk.Radiobutton(root, text="Deep Scan Recovery", variable=self.recovery_type, value="deep")
-        deep_btn.pack()
+        ttk.Button(frame, text="Deep Scan Recovery",
+                   command=lambda: threading.Thread(target=self.deep_scan).start()).grid(row=1, column=1)
 
-        # Buttons
-        self.recover_btn = tk.Button(root, text="Recover Files", command=self.recover_files, bg="green", fg="white")
-        self.recover_btn.pack(pady=10)
+        ttk.Button(frame, text="Select Recovered Files",
+                   command=self.select_files).grid(row=1, column=2)
 
-        self.mount_btn = tk.Button(root, text="Mount Disk", command=self.mount_disk)
-        self.mount_btn.pack(pady=5)
+        ttk.Button(frame, text="Generate Hashes",
+                   command=lambda: threading.Thread(target=self.generate_hashes).start()).grid(row=1, column=3)
 
-        self.exit_btn = tk.Button(root, text="Exit", command=root.quit)
-        self.exit_btn.pack(pady=10)
+        ttk.Button(frame, text="Show Statistics",
+                   command=self.show_chart).grid(row=1, column=4)
 
-        # Log box
-        log_label = tk.Label(root, text="Recovery Logs")
+        self.progress = ttk.Progressbar(root, length=500, mode='indeterminate')
+        self.progress.pack(pady=10)
+
+        log_label = tk.Label(
+            root,
+            text="Recovery Log",
+            font=("Arial", 14),
+            fg="white",
+            bg="#1e1e1e"
+        )
         log_label.pack()
 
-        self.log_box = tk.Text(root, height=12, width=70)
-        self.log_box.pack()
+        self.log_box = tk.Text(
+            root,
+            height=20,
+            width=120,
+            bg="black",
+            fg="lime"
+        )
+        self.log_box.pack(pady=10)
+
+    # ---------------- LOG ----------------
 
     def log(self, text):
         self.log_box.insert(tk.END, text + "\n")
         self.log_box.see(tk.END)
 
-    def select_disk(self):
-        path = filedialog.askopenfilename(filetypes=[("Disk Images", "*.img *.bin")])
+    # ---------------- CREATE IMAGE ----------------
 
-        if path:
-            self.disk_path = path
-            self.disk_label.config(text=path)
-            self.log("Disk selected: " + path)
+    def create_image(self):
+
+        self.progress.start()
+        self.log("Creating disk image...")
+
+        os.makedirs("input", exist_ok=True)
+
+        subprocess.run([
+            "sudo",
+            "dd",
+            "if=/dev/sdb",
+            "of=input/disk.img",
+            "bs=4M",
+            "status=progress"
+        ])
+
+        self.log("Disk image created at input/disk.img")
+        self.progress.stop()
+
+    # ---------------- MOUNT DISK ----------------
 
     def mount_disk(self):
 
-        if self.disk_path == "":
-            messagebox.showerror("Error", "Select disk image first")
+        self.progress.start()
+        self.log("Mounting disk image...")
+
+        os.makedirs(MOUNT_DIR, exist_ok=True)
+
+        subprocess.run([
+            "sudo",
+            "mount",
+            "input/disk.img",
+            MOUNT_DIR
+        ])
+
+        self.log("Disk mounted at mount_point")
+        self.progress.stop()
+
+    # ---------------- UNMOUNT ----------------
+
+    def unmount_disk(self):
+
+        self.progress.start()
+        self.log("Unmounting disk...")
+
+        subprocess.run([
+            "sudo",
+            "umount",
+            MOUNT_DIR
+        ])
+
+        self.log("Disk unmounted")
+        self.progress.stop()
+
+    # ---------------- METADATA RECOVERY ----------------
+
+    def metadata_recovery(self):
+
+        global valid_files
+
+        self.progress.start()
+        self.log("Starting Metadata Recovery...")
+
+        disk_image = "input/disk.img"
+
+        if not os.path.exists(disk_image):
+
+            self.log("ERROR: Disk image not found.")
+            self.progress.stop()
             return
 
-        cmd = f"sudo mount -o loop {self.disk_path} mount_point/"
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+        process = subprocess.Popen(
+            [
+                "python3",
+                "-m",
+                "src.metadata_recovery.recover",
+                disk_image,
+                OUTPUT_DIR
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True
+        )
+
+        for line in process.stdout:
+            self.log(line.strip())
+
+            if "Recovered" in line or "recovered" in line:
+                valid_files += 1
+
+        self.log("Metadata Recovery Completed")
+        self.progress.stop()
+
+    # ---------------- DEEP SCAN ----------------
+
+    def deep_scan(self):
+
+        self.progress.start()
+        self.log("Starting Deep Scan (PhotoRec)...")
+
+        image = "input/disk.img"
+
+        if not os.path.exists(image):
+
+            self.log("Disk image not found!")
+            self.progress.stop()
+            return
+
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+        cmd = [
+            "photorec",
+            "/log",
+            "/d", OUTPUT_DIR,
+            "/cmd", image, "options,search"
+        ]
+
+        subprocess.run(cmd)
+
+        self.log("Deep Scan Completed")
+
+        webbrowser.open(os.path.abspath(OUTPUT_DIR))
+
+        self.progress.stop()
+
+    # ---------------- SELECT FILES ----------------
+
+    def select_files(self):
+
+        global valid_files
+
+        files = filedialog.askopenfilenames(
+            initialdir=OUTPUT_DIR,
+            title="Select Recovered Files"
+        )
+
+        if not files:
+            self.log("No files selected")
+            return
+
+        for file in files:
+
+            self.log(file)
+            valid_files += 1
+            self.hash_file(file)
+
+    # ---------------- HASH SINGLE FILE ----------------
+
+    def hash_file(self, filepath):
+
+        sha256 = hashlib.sha256()
 
         try:
-            subprocess.run(cmd, shell=True)
-            self.log("Disk mounted successfully")
+
+            with open(filepath, "rb") as f:
+
+                while True:
+
+                    data = f.read(4096)
+
+                    if not data:
+                        break
+
+                    sha256.update(data)
+
+            hash_val = sha256.hexdigest()
+
+            self.log(f"{os.path.basename(filepath)} → SHA256: {hash_val}")
 
         except Exception as e:
-            self.log(str(e))
 
-    def recover_files(self):
+            self.log(f"Hashing failed for {filepath}: {e}")
 
-        if self.disk_path == "":
-            messagebox.showerror("Error", "Select disk image first")
-            return
+    # ---------------- HASH ALL FILES ----------------
 
-        recovery_method = self.recovery_type.get()
+    def generate_hashes(self):
 
-        if recovery_method == "metadata":
+        self.log("Starting Hashing Process...\n")
 
-            self.log("Starting Metadata Recovery...")
+        found = False
 
-            try:
-                subprocess.run(["python3","src/metadata_recovery/superblock_parser.py",self.disk_path])
-                subprocess.run(["python3","src/metadata_recovery/inode_parser.py",self.disk_path])
-                subprocess.run(["python3","src/metadata_recovery/recovery.py",self.disk_path])
+        for root_dir, dirs, files in os.walk(OUTPUT_DIR):
 
-                self.log("Metadata recovery completed")
+            for file in files:
 
-            except Exception as e:
-                self.log(str(e))
+                filepath = os.path.join(root_dir, file)
+
+                self.hash_file(filepath)
+
+                found = True
+
+        if not found:
+            self.log("No files found in output directory")
+
+        self.log("\nHashing Completed\n")
+
+    # ---------------- STATISTICS ----------------
+
+    def show_chart(self):
+
+        global valid_files, corrupted_files
+
+        if valid_files == 0 and corrupted_files == 0:
+            corrupted_files = 1
+
+        data = [valid_files, corrupted_files]
+        labels = ["Valid Files", "Corrupted Files"]
+
+        fig, ax = plt.subplots()
+        ax.pie(data, labels=labels, autopct='%1.1f%%')
+        ax.set_title("Recovery Statistics")
+
+        chart = tk.Toplevel(self.root)
+
+        canvas = FigureCanvasTkAgg(fig, chart)
+        canvas.draw()
+        canvas.get_tk_widget().pack()
 
 
-        elif recovery_method == "deep":
+# ---------------- START UI ----------------
 
-            self.log("Starting Deep Scan Recovery...")
+root = tk.Tk()
 
-            try:
-                subprocess.run(["python3","src/disk_reader.py",self.disk_path])
+app = DeepRecoveryUI(root)
 
-                self.log("Deep recovery completed")
-
-            except Exception as e:
-                self.log(str(e))
-
-
-if __name__ == "__main__":
-
-    root = tk.Tk()
-    app = RecoveryUI(root)
-    root.mainloop()
+root.mainloop()
