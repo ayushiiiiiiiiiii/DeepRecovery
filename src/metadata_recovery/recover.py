@@ -1,134 +1,141 @@
-import sys
 import os
-import subprocess
+import sys
+from datetime import datetime
+
+from src.metadata_recovery.superblock_parser import BtrfsSuperblockParser
+from src.metadata_recovery.inode_parser import BtrfsInodeParser
+from src.metadata_recovery.journal_analyzer import BtrfsJournalAnalyzer
 
 
-def detect_filesystem(image_path):
-    """
-    Detect filesystem type using the `file` command.
-    """
+class BtrfsMetadataRecovery:
 
-    try:
-        result = subprocess.check_output(["file", image_path]).decode().lower()
+    def __init__(self, image_path, output_dir="output/recovered_files"):
+        # Convert to absolute paths (VERY IMPORTANT)
+        self.image_path = os.path.abspath(image_path)
+        self.output_dir = os.path.abspath(output_dir)
 
-        if "ext2" in result or "ext3" in result or "ext4" in result:
-            return "ext"
+        self.superblock_parser = None
+        self.inode_parser = None
+        self.journal_analyzer = None
+        self.recovered_files = []
 
-        if "btrfs" in result:
-            return "btrfs"
+    def run(self):
+        print("=" * 60)
+        print("  DEEP-RECOVERY : Btrfs Metadata Recovery Engine")
+        print("=" * 60)
+        print(f"  Image  : {self.image_path}")
+        print(f"  Output : {self.output_dir}")
+        print(f"  Time   : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print("=" * 60)
 
-        return "unknown"
+        os.makedirs(self.output_dir, exist_ok=True)
 
-    except Exception as e:
-        print(f"[ERROR] Failed to detect filesystem: {e}")
-        return "unknown"
+        if not self._step_superblock():
+            print("[FATAL] Not a valid Btrfs image. Aborting.")
+            return []
 
+        self._step_inode_scan()
+        self._step_journal_analysis()
+        self._step_extract_files()
+        self._print_summary()
 
-# ---------------------------------------------------------
-# EXT METADATA RECOVERY
-# ---------------------------------------------------------
+        return self.recovered_files
 
-def recover_ext(image_path, output_dir):
+    def _step_superblock(self):
+        try:
+            self.superblock_parser = BtrfsSuperblockParser(self.image_path)
+            self.superblock_parser.read_superblock()
+            self.superblock_parser.parse()
 
-    print("[INFO] EXT filesystem detected")
-    print("[INFO] Starting EXT metadata recovery...")
+            print(self.superblock_parser.summary())
+            return self.superblock_parser.validate()
 
-    os.makedirs(output_dir, exist_ok=True)
+        except Exception as e:
+            print(f"[ERROR] Superblock parsing failed: {e}")
+            return False
 
-    try:
+    def _step_inode_scan(self):
+        sb = self.superblock_parser.parsed
+        nodesize = sb.get("nodesize", 16384)
 
-        # Use debugfs to list metadata
-        result = subprocess.run(
-            [
-                "sudo",
-                "debugfs",
-                "-R",
-                "ls -l",
-                image_path
-            ],
-            capture_output=True,
-            text=True
-        )
+        self.inode_parser = BtrfsInodeParser(self.image_path, nodesize=nodesize)
+        self.inode_parser.scan()
 
-        metadata_file = os.path.join(output_dir, "ext_metadata.txt")
+        print(f"[INFO] Inodes found: {len(self.inode_parser.inodes)}")
 
-        with open(metadata_file, "w") as f:
-            f.write(result.stdout)
+    def _step_journal_analysis(self):
+        self.journal_analyzer = BtrfsJournalAnalyzer(self.image_path)
+        self.journal_analyzer.analyze_superblock_copies()
+        self.journal_analyzer.detect_generation_changes()
+        self.journal_analyzer.find_orphan_inodes(self.inode_parser.inodes)
 
-        print(f"[INFO] Metadata saved to {metadata_file}")
+    def _step_extract_files(self):
+        name_map = self.inode_parser.get_filename_map()
+        inodes = self.inode_parser.inodes
 
-    except Exception as e:
-        print(f"[ERROR] EXT metadata recovery failed: {e}")
+        for oid, inode in inodes.items():
+            if inode.file_type_str() == "RegularFile" and inode.size > 0:
+                extents = self.inode_parser.get_extents_for_inode(oid)
 
+                if not extents:
+                    continue
 
-# ---------------------------------------------------------
-# BTRFS METADATA RECOVERY
-# ---------------------------------------------------------
+                print(f"[+] Recovering inode {oid}")
 
-def recover_btrfs(image_path, output_dir):
+                data = self._read_extents(extents, inode.size)
 
-    print("[INFO] Btrfs filesystem detected")
-    print("[INFO] Starting Btrfs metadata recovery...")
+                if data:
+                    name = name_map.get(oid, f"file_{oid}.bin")
+                    out_path = os.path.join(self.output_dir, name)
 
-    try:
+                    with open(out_path, "wb") as f:
+                        f.write(data)
 
-        from src.metadata_recovery.superblock_parser import BtrfsSuperblockParser
+                    self.recovered_files.append(out_path)
 
-        parser = BtrfsSuperblockParser(image_path)
+    def _read_extents(self, extents, expected_size):
+        result = bytearray()
 
-        if not parser.is_valid():
+        try:
+            with open(self.image_path, "rb") as f:
+                for ext in extents:
+                    if ext.extent_type == 0:
+                        result.extend(ext.inline_data)
 
-            print("[WARNING] Invalid Btrfs superblock")
-            return
+                    elif ext.extent_type in (1, 2):
+                        f.seek(ext.disk_bytenr)
+                        result.extend(f.read(ext.num_bytes))
 
-        parser.parse()
+        except Exception as e:
+            print(f"[ERROR] Extent read failed: {e}")
+            return None
 
-        print("[INFO] Btrfs metadata parsed successfully")
+        return bytes(result[:expected_size])
 
-    except ImportError:
-        print("[ERROR] Btrfs parser module not found")
+    def _print_summary(self):
+        print("\n" + "=" * 60)
+        print("RECOVERY SUMMARY")
+        print("=" * 60)
+        print(f"Recovered files: {len(self.recovered_files)}")
 
-    except Exception as e:
-        print(f"[ERROR] Btrfs metadata recovery failed: {e}")
+        for f in self.recovered_files:
+            print(f" - {f}")
 
-
-# ---------------------------------------------------------
-# MAIN FUNCTION
-# ---------------------------------------------------------
 
 def main():
-
-    if len(sys.argv) < 3:
-
-        print("Usage:")
-        print("python -m src.metadata_recovery.recover <disk_image> <output_dir>")
+    if len(sys.argv) < 2:
+        print("Usage: python3 -m src.metadata_recovery.recover <disk_image> [output_dir]")
         sys.exit(1)
 
-    disk_image = sys.argv[1]
-    output_dir = sys.argv[2]
+    image_path = sys.argv[1]
+    output_dir = sys.argv[2] if len(sys.argv) > 2 else "output/recovered_files"
 
-    if not os.path.exists(disk_image):
-
-        print("[ERROR] Disk image not found")
+    if not os.path.exists(image_path):
+        print(f"[!] Error: File not found -> {image_path}")
         sys.exit(1)
 
-    print(f"[INFO] Disk image: {disk_image}")
-
-    fs_type = detect_filesystem(disk_image)
-
-    print(f"[INFO] Detected filesystem: {fs_type}")
-
-    if fs_type == "ext":
-
-        recover_ext(disk_image, output_dir)
-
-    elif fs_type == "btrfs":
-
-        recover_btrfs(disk_image, output_dir)
-
-    else:
-
-        print("[WARNING] Unsupported filesystem type")
+    recovery = BtrfsMetadataRecovery(image_path, output_dir)
+    recovery.run()
 
 
 if __name__ == "__main__":
